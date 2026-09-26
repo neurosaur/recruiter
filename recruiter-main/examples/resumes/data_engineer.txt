@@ -1,5 +1,0 @@
-Synthetic Candidate D
-Data Engineer
-4 years building Python ETL pipelines and PostgreSQL data warehouses.
-Maintained scheduled data imports with SQL, Docker and automated tests.
-Collaborated with backend teams on data quality and API integration.

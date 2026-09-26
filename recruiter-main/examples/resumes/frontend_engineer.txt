@@ -1,4 +1,0 @@
-Synthetic Candidate C
-Frontend Developer
-3 years building React and TypeScript dashboards with HTML and CSS.
-Integrated REST APIs and maintained browser UI tests.

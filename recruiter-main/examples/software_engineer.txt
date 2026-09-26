@@ -1,3 +1,0 @@
-Backend Software Engineer
-Seeking an engineer with Python, FastAPI, PostgreSQL and REST API experience.
-Experience with Docker deployment and pytest automated testing is preferred.
