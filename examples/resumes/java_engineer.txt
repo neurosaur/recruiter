@@ -1,0 +1,5 @@
+Synthetic Candidate E
+Java Software Engineer
+5 years developing Spring Boot REST APIs with Java and PostgreSQL.
+Built Docker images and CI pipelines. Wrote JUnit integration tests.
+Maintained payment processing services and production monitoring.
