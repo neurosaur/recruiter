@@ -17,8 +17,7 @@ test('controller smoke: 30 uploads → report → chat → selection → downloa
       append(child) { (this.children ||= []).push(child); }, scrollIntoView() {}, click() {}, remove() {} };
   }
   for (const match of html.matchAll(/id="([^"]+)"/g)) elements.set(match[1], element(match[1]));
-  elements.get('strict-limit').value = '10';
-  elements.get('loose-limit').value = '20';
+  for (const removed of ['strict-limit', 'loose-limit', 'requirements-list', 'confirm-requirements', 'criteria-text']) assert(!elements.has(removed));
   const document = { querySelector(selector) { assert(selector.startsWith('#'), selector); assert(elements.has(selector.slice(1)), `Missing element ${selector}`); return elements.get(selector.slice(1)); },
     querySelectorAll(selector) { return selector.startsWith('section.') ? [1, 2, 3].map((i) => elements.get(`step-${i}`)) : []; }, createElement: element, body: element() };
   const downloads = [];
@@ -30,8 +29,6 @@ test('controller smoke: 30 uploads → report → chat → selection → downloa
   elements.get('jd-text').value = 'Required\nPython is required to develop software services for a growing engineering platform.';
   await controller.continueToResumes();
   assert.equal(controller.state.step, 2);
-  assert(controller.state.requirements.length > 0);
-  controller.state.requirements = [{ id: 'REQ-01', description: 'Python', category: 'Technical skill', type: 'Mandatory', minimum: null, maximum: null, unit: '' }];
   const files = Array.from({ length: 30 }, (_, i) => new File([`Built Python services and delivered software for project number ${i}.`], `engineer-${i}.txt`, { type: 'text/plain' }));
   controller.addFiles(files);
   assert.equal(elements.get('candidate-count').textContent, '30 of 30');
@@ -39,22 +36,20 @@ test('controller smoke: 30 uploads → report → chat → selection → downloa
   assert.equal(controller.state.files.length, 30);
   assert.match(elements.get('alert-region').innerHTML, /no more than 30/);
   await controller.compareCandidates();
-  assert.equal(controller.state.report, null);
-  elements.get('confirm-requirements').checked = true;
-  await controller.compareCandidates();
   assert.equal(controller.state.step, 3);
   assert.equal(controller.state.report.results.length, 30);
-  assert.equal(controller.state.report.cohorts.strict.length, 10);
-  assert.match(elements.get('result-cards').innerHTML, /Requirement-by-requirement analysis/);
-  controller.askBot('Show strict and loose cohorts');
-  assert.match(controller.state.report.chat[0].text, /LOOSE — 20/);
+  assert.equal(controller.state.report.cohort.length, 30);
+  assert(controller.state.report.requirements.length > 0);
+  assert.equal(controller.state.report.cohorts, undefined);
+  assert.match(elements.get('result-cards').innerHTML, /JD evidence and gaps/);
+  controller.askBot('Show everyone in ranked order');
+  assert.match(controller.state.report.chat[0].text, /30 candidates total/);
   const first = controller.state.results[0];
   controller.state.review.set(first.sourceSha256, { selected: true, note: 'Follow up with recruiter' });
   controller.askBot('Who did I shortlist?');
   assert.match(controller.state.report.chat.at(-1).text, /Follow up with recruiter/);
-  elements.get('strict-limit').value = '5';
-  await elements.get('update-cohorts').listeners.click[0]();
-  assert.equal(controller.state.report.cohorts.strict.length, 5);
+  controller.askBot("Who hasn't completed a PhD?");
+  assert.match(controller.state.report.chat.at(-1).text, /completion unknown/);
   assert.equal(controller.state.report.shortlist.length, 1);
   controller.downloadReview();
   const report = JSON.parse(await downloads.at(-1).text());

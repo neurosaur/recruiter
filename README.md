@@ -2,18 +2,18 @@
 
 This repository now supports two separate operating modes:
 
-- **Cloudflare Workers Free:** a static browser application under `public/`. It reviews 5–30 TXT, text-based PDF or DOCX resumes against editable JD requirements, generates a JSON report, proposes strict/loose review cohorts, and provides a report-grounded chatbot with citations and candidate questions. No application server or Cloudflare Container is used.
+- **Cloudflare Workers Free:** a static browser application under `public/`. Enter a JD, upload 5–30 TXT, text-based PDF or DOCX resumes, and receive one ranked cohort containing every readable resume. A report-grounded chatbot answers candidate/group questions with citations. No application server or Cloudflare Container is used.
 - **Local Python:** the original Streamlit, Sentence Transformers and FAISS workflow remains available for local use. It is not deployed by the Free-plan configuration.
 
 ## Evidence review and chatbot
 
-The hosted workflow implements the supplied fine-tune specification as an evidence framework, not model weight training. Review the automatically drafted requirements before comparing: edit mandatory/preferred labels, category, numeric bounds and units; add missing requirements; and separate compound criteria. The application distinguishes demonstrated evidence, mentions, partial matches, missing information, contradictions and claims needing verification.
+The hosted workflow automatically extracts JD requirements in the background. There is no requirements questionnaire, rating form or confirmation step. It distinguishes demonstrated evidence, mentions, partial matches, missing information, contradictions and claims needing verification. Expand a candidate's evidence details when needed.
 
-Strict cohorts require all mandatory requirements to be supported by resume evidence (cap 10). Loose cohorts require at least 50% direct evidence coverage without an explicit mandatory contradiction (cap 20). Caps can be reduced, and neither cohort is padded. Final shortlisting remains a recruiter action.
+Everyone remains in one ranked cohort. Strict/loose tiers and their controls have been removed. Final shortlisting remains an optional recruiter action.
 
-The JSON is generated when comparison completes. Ask the assistant for strict/loose cohorts, your manual shortlist, candidate evidence, gaps or interview questions. Follow-up questions use the selected candidate context. Download the full review, individual cohort JSON, or original resume files. Full JSON includes extracted resume text and chat history; closing the tab clears the active review.
+The JSON is generated when comparison completes. Ask “Who hasn't completed a PhD?”, “Who knows Python?”, “Which resumes should I review later?”, or ask about a named candidate. PhD answers separate explicitly completed, in-progress, explicitly incomplete, unmentioned and unclear qualifications. Lower-priority suggestions show JD evidence gaps without removing anyone. Download the full review JSON or original resumes. Full JSON includes extracted resume text and chat history; closing the tab clears the active review.
 
-See [the evidence engine specification](docs/REVIEW_ENGINE.md) for the schema, policies, uncertainty handling and limitations. “Verified” means resume-supported, not externally authenticated. The heuristic extractor and matcher require recruiter review; they are not a fine-tuned language model.
+See [the evidence engine specification](docs/REVIEW_ENGINE.md) for the schema and limitations. The bot uses local excerpt retrieval and structured answers, not a hosted language model. “Verified” means resume-supported, not externally authenticated.
 
 ## Cloudflare Free deployment
 

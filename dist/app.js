@@ -1,4 +1,4 @@
-import { MAX_RESUMES, CATEGORIES, TYPES, extractRequirements, createReport, buildCohorts, answerQuestion, suggestedQuestions } from './review-engine.js';
+import { MAX_RESUMES, createReport, answerQuestion, suggestedQuestions } from './review-engine.js';
 
 const PDF_MODULE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs';
 const PDF_WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
@@ -8,12 +8,10 @@ const ALLOWED_EXTENSIONS = new Set(['txt', 'pdf', 'docx']);
 const state = {
   step: 1,
   jd: '',
-  criteria: [],
   files: [],
   results: [],
   failures: [],
   review: new Map(),
-  requirements: [],
   report: null,
   chatContext: {},
   documents: new Map(),
@@ -24,7 +22,6 @@ const elements = {
   jdText: document.querySelector('#jd-text'),
   jdFile: document.querySelector('#jd-file'),
   jdFileName: document.querySelector('#jd-file-name'),
-  criteriaText: document.querySelector('#criteria-text'),
   continueButton: document.querySelector('#continue-button'),
   editJdButton: document.querySelector('#edit-jd-button'),
   jdPreviewText: document.querySelector('#jd-preview-text'),
@@ -179,7 +176,7 @@ function addFiles(fileList) {
 function renderResults() {
   elements.metrics.innerHTML = `
     <div class="metric"><span>Candidates compared</span><strong>${state.results.length}</strong></div>
-    <div class="metric"><span>Strict / loose cohort</span><strong>${state.report.cohorts.strict.length} / ${state.report.cohorts.loose.length}</strong></div>
+    <div class="metric"><span>In this cohort</span><strong>${state.report.cohort.length}</strong></div>
     <div class="metric"><span>Files skipped</span><strong>${state.failures.length}</strong></div>
   `;
 
@@ -213,14 +210,14 @@ function renderResults() {
         <summary>
           <span class="rank-badge">${index + 1}</span>
           <span class="candidate-title"><strong>${escapeHtml(result.candidate)}</strong><small>${result.verifiedRequirements} verified · ${result.evidenceCoverage}% evidence coverage</small></span>
-          <span class="result-score">${state.report.cohorts.strict.includes(result.sourceSha256) ? 'Strict' : state.report.cohorts.loose.includes(result.sourceSha256) ? 'Loose' : 'Review gaps'}</span>
+          <span class="result-score">Rank ${index + 1}</span>
         </summary>
         <div class="result-content">
           <p>This candidate ranks ${index + 1} of ${state.results.length}. Review the excerpts and verify experience, skill depth, location, availability and compensation directly.</p>
           <h3>Evidence to review</h3>
           <div class="evidence-list">${evidence}</div>
           ${checks}
-          <h3>Requirement-by-requirement analysis</h3>
+          <details><summary>JD evidence and gaps</summary>
           <div class="requirement-analysis">${result.requirementAnalysis.map((a) => `
             <article class="analysis-item">
               <strong>${escapeHtml(a.id)} · ${escapeHtml(a.description)}</strong>
@@ -229,7 +226,7 @@ function renderResults() {
               ${a.candidateEvidence.map((e) => `<blockquote>${escapeHtml(e.text)}<small>${escapeHtml(e.candidate)}, extracted segment ${e.segment}</small></blockquote>`).join('')}
               ${a.notes.map((note) => `<small>${escapeHtml(note)}</small>`).join('')}
               ${a.verificationQuestion ? `<p><b>Ask:</b> ${escapeHtml(a.verificationQuestion)}</p>` : ''}
-            </article>`).join('')}</div>
+            </article>`).join('')}</div></details>
           <div class="action-row"><button type="button" class="button secondary" data-resume="${result.sourceSha256}">Download original resume</button><button type="button" class="button secondary" data-ask="${result.sourceSha256}">Ask about this candidate</button></div>
           <div class="review-controls">
             <label><input type="checkbox" data-shortlist="${result.sourceSha256}"> Add to shortlist</label>
@@ -239,7 +236,6 @@ function renderResults() {
       </details>
     `;
   }).join('');
-  renderCohorts();
 }
 
 async function continueToResumes() {
@@ -251,13 +247,7 @@ async function continueToResumes() {
     const jd = pasted || (uploaded ? await parseDocument(uploaded) : '');
     if (wordCount(jd) < 10) throw new Error('Provide a fuller job description containing at least 10 words.');
     state.jd = jd;
-    state.criteria = elements.criteriaText.value
-      .split(/\r?\n/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-    state.requirements = extractRequirements(state.jd, state.criteria);
-    renderRequirements();
-    elements.jdPreviewText.textContent = `${state.jd}${state.criteria.length ? `\n\nPhrases to verify:\n• ${state.criteria.join('\n• ')}` : ''}`;
+    elements.jdPreviewText.textContent = state.jd;
     setStep(2);
   } catch (error) {
     showAlert(error.message || String(error));
@@ -271,7 +261,6 @@ async function compareCandidates() {
     showAlert('Select between 5 and 30 resumes.');
     return;
   }
-  if (!document.querySelector('#confirm-requirements').checked) { showAlert('Review the extracted requirements and confirm them before comparing.'); return; }
 
   showAlert('');
   setButtonBusy(elements.compareButton, true, 'Reading resumes…', 'Compare candidates <span aria-hidden="true">→</span>');
@@ -300,7 +289,7 @@ async function compareCandidates() {
       throw new Error(`Only ${records.length} readable, unique resumes remain. At least 5 are required. Replace skipped files and try again.`);
     }
     elements.compareButton.textContent = 'Calculating relevance…';
-    state.report = createReport(state.jd, records, state.requirements, failures, cohortOptions());
+    state.report = createReport(state.jd, records, undefined, failures);
     state.results = state.report.results;
     state.failures = failures;
     state.review = new Map();
@@ -334,7 +323,6 @@ function syncReport() {
     result.recruiterDecision = state.review.get(result.sourceSha256)?.selected ? 'shortlisted_by_recruiter' : 'not_selected_in_this_review';
   });
   state.report.shortlist = selected.map((r) => ({ candidate: r.candidate, sourceSha256: r.sourceSha256, recruiterNote: r.recruiterNote }));
-  state.report.criteria = state.criteria;
 }
 
 function downloadJson(report, filename) {
@@ -352,14 +340,13 @@ function downloadBlob(blob, filename) {
 }
 
 function resetReview() {
-  Object.assign(state, { step: 1, jd: '', criteria: [], files: [], results: [], failures: [], review: new Map(), requirements: [], report: null, chatContext: {}, documents: new Map() });
+  Object.assign(state, { step: 1, jd: '', files: [], results: [], failures: [], review: new Map(), report: null, chatContext: {}, documents: new Map() });
   document.querySelector('#chat-messages').replaceChildren();
   document.querySelector('#result-cards').replaceChildren();
-  for (const id of ['cohort-summary', 'chat-suggestions', 'ranking-body', 'metrics', 'skipped-files', 'requirements-list']) document.querySelector(`#${id}`).replaceChildren();
+  for (const id of ['chat-suggestions', 'ranking-body', 'metrics', 'skipped-files']) document.querySelector(`#${id}`).replaceChildren();
   document.querySelector('#chat-candidate').innerHTML = '<option value="">Whole review</option>';
   document.querySelector('#chat-input').value = '';
   elements.jdText.value = '';
-  elements.criteriaText.value = '';
   elements.jdFile.value = '';
   elements.resumeFiles.value = '';
   elements.jdFileName.hidden = true;
@@ -367,22 +354,6 @@ function resetReview() {
   setStep(1);
 }
 
-function renderRequirements() {
-  document.querySelector('#confirm-requirements').checked = false;
-  document.querySelector('#requirements-list').innerHTML = state.requirements.map((r, i) => `<div class="requirement-editor" data-requirement="${i}">
-    <label>${escapeHtml(r.id)}<input aria-label="Requirement ${i + 1}" data-field="description" value="${escapeHtml(r.description)}" required></label>
-    <label>Category<select data-field="category">${CATEGORIES.map((v) => `<option ${v === r.category ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-    <label>Type<select data-field="type">${TYPES.map((v) => `<option ${v === r.type ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-    <label>Minimum<input type="number" min="0" step="0.5" data-field="minimum" value="${r.minimum ?? ''}"></label>
-    <label>Maximum<input type="number" min="0" step="0.5" data-field="maximum" value="${r.maximum ?? ''}"></label>
-    <label>Unit<input data-field="unit" value="${escapeHtml(r.unit)}" placeholder="years, employees…"></label>
-    <button class="remove-file" type="button" data-delete-requirement="${i}">Remove</button>
-  </div>`).join('');
-}
-function cohortOptions() { return { strictLimit: Number(document.querySelector('#strict-limit').value), looseLimit: Number(document.querySelector('#loose-limit').value) }; }
-function renderCohorts() {
-  document.querySelector('#cohort-summary').innerHTML = ['strict', 'loose'].map((mode) => `<div><h3>${mode === 'strict' ? 'Strict' : 'Loose'} cohort · ${state.report.cohorts[mode].length}</h3><p>${escapeHtml(state.report.cohorts.policy[mode])}</p><ul>${state.results.filter((r) => state.report.cohorts[mode].includes(r.sourceSha256)).map((r) => `<li>${escapeHtml(r.candidate)}</li>`).join('') || '<li>No candidates meet this policy.</li>'}</ul><button type="button" class="button secondary" data-cohort-download="${mode}">Download ${mode} JSON</button></div>`).join('');
-}
 function renderSuggestions() {
   if (!state.report) return;
   document.querySelector('#chat-suggestions').innerHTML = suggestedQuestions(state.report, state.chatContext.candidateId).map((q) => `<button type="button" class="button ghost" data-question="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
@@ -402,36 +373,6 @@ function askBot(question) {
   renderSuggestions();
 }
 
-document.querySelector('#requirements-list').addEventListener('input', (event) => {
-  const row = event.target.closest('[data-requirement]');
-  if (!row || !event.target.dataset.field) return;
-  const field = event.target.dataset.field;
-  state.requirements[Number(row.dataset.requirement)][field] = ['minimum', 'maximum'].includes(field) ? event.target.value === '' ? null : Number(event.target.value) : event.target.value;
-  document.querySelector('#confirm-requirements').checked = false;
-});
-document.querySelector('#requirements-list').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-delete-requirement]');
-  if (button) { state.requirements.splice(Number(button.dataset.deleteRequirement), 1); renderRequirements(); }
-});
-document.querySelector('#add-requirement').addEventListener('click', () => {
-  const next = Math.max(0, ...state.requirements.map((r) => Number(r.id.split('-')[1]))) + 1;
-  state.requirements.push({ id: `REQ-${String(next).padStart(2, '0')}`, description: '', category: 'Technical skill', type: 'Mandatory', sourceText: 'Recruiter added', minimum: null, maximum: null, unit: '' });
-  renderRequirements();
-});
-document.querySelector('#update-cohorts').addEventListener('click', () => {
-  state.report.cohorts = buildCohorts(state.results, cohortOptions());
-  syncReport();
-  renderResults();
-  for (const input of elements.resultCards.querySelectorAll('[data-shortlist]')) input.checked = Boolean(state.review.get(input.dataset.shortlist)?.selected);
-  for (const input of elements.resultCards.querySelectorAll('[data-note]')) input.value = state.review.get(input.dataset.note)?.note || '';
-  askBot('Show strict and loose cohorts');
-});
-document.querySelector('#cohort-summary').addEventListener('click', (event) => {
-  const mode = event.target.closest('[data-cohort-download]')?.dataset.cohortDownload;
-  if (!mode) return;
-  syncReport();
-  downloadJson({ schemaVersion: state.report.schemaVersion, generatedAt: new Date().toISOString(), mode, policy: state.report.cohorts.policy[mode], requirements: state.report.requirements, results: state.results.filter((r) => state.report.cohorts[mode].includes(r.sourceSha256)) }, `neurosaur-${mode}-cohort.json`);
-});
 document.querySelector('#chat-form').addEventListener('submit', (event) => { event.preventDefault(); const input = document.querySelector('#chat-input'); askBot(input.value); input.value = ''; });
 document.querySelector('#chat-suggestions').addEventListener('click', (event) => { const q = event.target.closest('[data-question]')?.dataset.question; if (q) askBot(q); });
 document.querySelector('#chat-candidate').addEventListener('change', (event) => { state.chatContext = { candidateId: event.target.value || null }; renderSuggestions(); });

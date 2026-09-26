@@ -288,8 +288,9 @@ tbody tr:last-child td { border-bottom: 0; }
 
 .result-cards { display: grid; gap: 13px; margin-top: 22px; }
 .result-card { border: 1px solid var(--line); border-radius: 17px; background: white; overflow: hidden; }
-.result-card summary { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 13px; align-items: center; padding: 17px; cursor: pointer; list-style: none; }
-.result-card summary::-webkit-details-marker { display: none; }
+.result-card > summary { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 13px; align-items: center; padding: 17px; cursor: pointer; list-style: none; }
+.result-card > summary::-webkit-details-marker { display: none; }
+.result-content details > summary { padding: 12px 0; cursor: pointer; font-weight: 700; }
 .rank-badge { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: white; background: var(--green); font-weight: 900; }
 .candidate-title { min-width: 0; }
 .candidate-title strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -358,7 +359,7 @@ blockquote { margin: 10px 0; padding: 10px 14px; border-left: 3px solid #8abfa8;
   .section-heading, .download-panel { align-items: stretch; flex-direction: column; }
   .metrics { grid-template-columns: 1fr; }
   .decision-banner { grid-template-columns: 1fr; }
-  .result-card summary { grid-template-columns: 38px minmax(0, 1fr); }
+  .result-card > summary { grid-template-columns: 38px minmax(0, 1fr); }
   .result-score { grid-column: 2; }
   .result-content { padding: 0 15px 18px; }
   .review-controls { grid-template-columns: 1fr; }

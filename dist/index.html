@@ -71,12 +71,6 @@
             <div id="jd-file-name" class="selected-file" hidden></div>
           </div>
 
-          <div class="field-group">
-            <label for="criteria-text">Skills or phrases to verify <span class="optional">Optional</span></label>
-            <span class="field-help">Enter one phrase per line. A mention is not proof of proficiency.</span>
-            <textarea id="criteria-text" rows="5" placeholder="Python&#10;FastAPI&#10;PostgreSQL"></textarea>
-          </div>
-
           <div class="action-row end">
             <button id="continue-button" class="button primary" type="button">Continue to resumes <span aria-hidden="true">→</span></button>
           </div>
@@ -89,16 +83,8 @@
           </div>
 
           <details class="jd-preview">
-            <summary>Review job description and criteria</summary>
+            <summary>Review job description</summary>
             <pre id="jd-preview-text"></pre>
-          </details>
-
-          <details class="jd-preview" open>
-            <summary>Review extracted requirements</summary>
-            <p>These are editable drafts. Check every requirement, split combined criteria, and mark company information as Context. Keep mandatory and preferred requirements separate. Numeric bounds apply only to the unit and subject stated in the requirement.</p>
-            <div id="requirements-list"></div>
-            <button id="add-requirement" class="button secondary" type="button">Add requirement</button>
-            <label class="confirmation"><input id="confirm-requirements" type="checkbox"> I reviewed the requirements, categories and mandatory/preferred labels.</label>
           </details>
 
           <label id="resume-dropzone" class="dropzone" for="resume-files">
@@ -123,13 +109,13 @@
 
         <section id="step-3" class="workspace-card" aria-labelledby="step-3-title" hidden>
           <div class="section-heading">
-            <div><p class="eyebrow">STEP 3 OF 3</p><h2 id="step-3-title">Review evidence and build your shortlist</h2></div>
+            <div><p class="eyebrow">STEP 3 OF 3</p><h2 id="step-3-title">Your ranked candidate cohort</h2></div>
             <button id="new-review-button" class="button ghost" type="button">Start new review</button>
           </div>
 
           <div class="decision-banner">
             <strong>Keep a person in the decision.</strong>
-            <span>Review each requirement and its resume evidence. “Verified” means supported by resume text, not independently authenticated. Cohorts are review suggestions; you make the final selections.</span>
+            <span>Every readable resume is included. Ranking uses the JD and resume evidence. Missing information stays unknown; you make the final selections.</span>
           </div>
 
           <div class="metrics" id="metrics"></div>
@@ -142,20 +128,13 @@
             </table>
           </div>
 
-          <section class="cohort-panel" aria-labelledby="cohort-title">
-            <h3 id="cohort-title">Strict and loose review cohorts</h3>
-            <p>Caps are not quotas. Missing evidence can produce fewer candidates, including none. Loose cohorts may include strict candidates.</p>
-            <div class="action-row"><label>Strict cap (1–10)<input id="strict-limit" type="number" min="1" max="10" value="10"></label><label>Loose cap (1–20)<input id="loose-limit" type="number" min="1" max="20" value="20"></label><button id="update-cohorts" class="button secondary" type="button">Update cohorts</button></div>
-            <div id="cohort-summary" class="cohort-grid"></div>
-          </section>
-
           <section class="chat-panel" aria-labelledby="chat-title">
             <h3 id="chat-title">Ask your review assistant</h3>
-            <p>Your review JSON is ready. This assistant uses its requirements, cohorts and resume excerpts to answer supported questions. It can show gaps and suggest candidate interview questions.</p>
+            <p>Ask about anyone or a group in this round. Answers use resume excerpts and distinguish stated facts from missing information.</p>
             <label for="chat-candidate">Candidate context</label><select id="chat-candidate"><option value="">Whole review</option></select>
             <div id="chat-suggestions" class="chat-suggestions"></div>
             <div id="chat-messages" aria-live="polite" aria-relevant="additions"></div>
-            <form id="chat-form"><label for="chat-input">Ask about this round</label><textarea id="chat-input" rows="2" maxlength="2000" required placeholder="Show the strict and loose cohorts, or ask about a candidate’s gaps…"></textarea><button class="button primary" type="submit">Ask assistant</button></form>
+            <form id="chat-form"><label for="chat-input">Ask about this round</label><textarea id="chat-input" rows="2" maxlength="2000" required placeholder="Who hasn't completed a PhD? Which resumes should I review later?"></textarea><button class="button primary" type="submit">Ask assistant</button></form>
           </section>
 
           <div id="result-cards" class="result-cards"></div>

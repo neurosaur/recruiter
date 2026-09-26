@@ -56,7 +56,7 @@ dist/review-engine.js
 dist/styles.css
 ```
 
-After GitHub-connected deployment, test on the hosted URL: paste a JD, confirm the extracted requirements, upload 30 distinct synthetic resumes, compare strict and loose cohorts, ask candidate-specific questions, select candidates and download the JSON review. The automated controller smoke test exercises this flow without starting a local server. Browser rendering and PDF/DOCX reader integration should also be checked on the hosted site.
+After GitHub-connected deployment, test on the hosted URL: paste a JD, upload 30 distinct synthetic resumes, inspect the full ranked cohort, ask about PhD completion or lower-priority resumes, select candidates and download the JSON review. No requirement confirmation or strict/loose setup is needed. The automated controller smoke test exercises this flow without starting a local server. Browser rendering and PDF/DOCX reader integration should also be checked on the hosted site.
 
 ## Data handling and functional differences
 
@@ -64,7 +64,7 @@ After GitHub-connected deployment, test on the hosted URL: paste a JD, confirm t
 - Closing or refreshing the page clears the review; download the JSON first.
 - TXT works without a document-reader library. PDF.js and Mammoth are loaded from pinned public CDNs for PDF and DOCX parsing. The document bytes remain in the browser, but production handling of sensitive resumes should use locally vendored copies of those libraries.
 - Scanned PDFs still require OCR before use.
-- The web review ranks verified requirement count, direct evidence coverage, then TF-IDF relevance. It is not the local MiniLM semantic score or a hiring probability. Review the editable extraction and cited evidence before deciding.
+- The web review automatically extracts JD criteria and ranks verified requirement count, direct evidence coverage, then TF-IDF relevance. It is not the local MiniLM semantic score or a hiring probability. Everyone remains in the ranked cohort.
 - The report-grounded assistant supports cohorts, manual selections, gaps, evidence retrieval and candidate questions without an API key. No model weights are fine-tuned by this update; see `docs/REVIEW_ENGINE.md`.
 - JSON exports contain extracted resume text, evidence, cohorts, recruiter decisions and chat history. They are candidate data, not public deployment artifacts.
 - The original Python/Streamlit semantic workflow remains available locally through `setup.ps1` and `start.ps1`.

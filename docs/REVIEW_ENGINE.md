@@ -1,19 +1,18 @@
 # Evidence review specification
 
-This update implements the requirement-evidence workflow described in the supplied `fine-tune.docx`. That document is a product specification, not a labeled training dataset. No MiniLM weights were trained, and no hosted LLM or API key is required. The deployed Cloudflare application uses an editable, deterministic evidence engine in `public/review-engine.js` and a report-grounded retrieval assistant.
+The deployed Cloudflare application automatically analyzes JD/resume evidence with `public/review-engine.js` and a report-grounded retrieval assistant. The supplied `fine-tune.docx` is a product specification, not a labeled training dataset. No MiniLM weights were trained, and no hosted LLM or API key is required.
 
 ## Workflow
 
-1. Enter a JD and optional phrases.
-2. Review the extracted requirements. Edit descriptions, categories, mandatory/preferred labels, numeric bounds and units. Split compound requirements and add requirements the draft extraction missed. Explicit confirmation is required before comparison.
-3. Upload 5–30 unique readable TXT, PDF or DOCX resumes, up to 10 MB each.
-4. Generate the in-memory JSON report and requirement-by-requirement analysis.
-5. Inspect strict/loose cohorts, ask the assistant questions, review candidate FAQs, and manually shortlist candidates.
-6. Download the full JSON, cohort JSON, or individual original resumes. The JSON includes extracted resume text, so handle it as candidate data. Closing or refreshing clears this tab's data.
+1. Enter a JD.
+2. Upload 5–30 unique readable TXT, PDF or DOCX resumes, up to 10 MB each.
+3. Compare: analysis runs automatically, with no requirements editor, ratings or confirmation gate.
+4. Inspect one ranked cohort containing everyone. Ask the assistant about candidates or groups; notes and manual shortlisting are optional.
+5. Download the full JSON or individual original resumes. The JSON includes extracted resume text, so handle it as candidate data. Closing or refreshing clears this tab's data.
 
 ## Requirement schema
 
-Each requirement has `id`, `description`, `category`, `type`, `sourceText`, `minimum`, `maximum`, and `unit`. Categories cover eligibility, experience, qualifications, technical skills/tools, responsibilities, scope, industry/domain, achievements and context. Types are Mandatory, Preferred, Responsibility and Context. Optional user phrases start as Preferred; explicit JD mandatory language is preserved. Unlabeled prose starts as Preferred rather than silently becoming a hard eligibility filter.
+Automatically extracted requirements have `id`, `description`, `category`, `type`, `sourceText`, `minimum`, `maximum`, and `unit`. Categories cover eligibility, experience, qualifications, technical skills/tools, responsibilities, scope, industry/domain, achievements and context. Types are Mandatory, Preferred, Responsibility and Context. Explicit JD mandatory language is preserved. Unlabeled prose starts as Preferred rather than silently becoming a hard eligibility filter.
 
 Candidate analysis adds `candidateEvidence` (filename, content hash, extracted segment number and quote), `evidenceStrength`, `candidateValue`, `experienceEstimate`, `verificationStatus`, `gap`, `lastEvidenceYear`, `notes`, and `verificationQuestion`.
 
@@ -28,23 +27,23 @@ Statuses distinguish Verified, Mentioned, Partial, Not Found, Contradicted, Requ
 - Q1 journal status and externally verifiable achievements remain unverified, even when the resume claims them. No journal database or credential issuer is queried.
 - Location/authorization constraints require confirmation. A different city alone is not a contradiction.
 - Explicit negative claims are distinguished from missing data. Skill evidence dated more than three years ago is flagged for recency review. Undated evidence retains unknown recency.
-- Scope, responsibilities and industry evidence use the same explicit-subject rules. Unknown tools or domain terms can be added in the editor; there is no exhaustive industry ontology.
+- Scope, responsibilities and industry evidence use the same explicit-subject rules. There is no exhaustive industry ontology.
 
 The draft extractor and word-based evidence matcher are heuristics. They can miss paraphrases, complex tables, multi-line role context, negation scope, acronyms or unusual date formats. Review the extracted requirements and quotes. This version does not claim universal semantic understanding or calibrated predictive hiring accuracy.
 
 ## Cohort policy
 
-Strict: every mandatory requirement must be Verified, and there must be at least one mandatory requirement. The cap is configurable from 1 to 10.
+Every readable resume remains in one ranked cohort. Strict/loose tiers, caps and controls are removed. Results sort by verified requirement count, direct evidence coverage, then TF-IDF relevance. All criteria have equal weight within these counts; these defaults are engineering rules, not learned thresholds.
 
-Loose: at least 50% of non-context requirements have direct evidence, and no mandatory requirement is Contradicted. Direct evidence counts Verified, Mentioned, or Requires Verification only when strength is Moderate or Strong. The cap is configurable from 1 to 20. Loose may include strict candidates.
-
-Neither cohort is padded to meet a target. Preferred gaps do not automatically fail strict eligibility. Results sort by verified requirement count, then direct evidence coverage, then TF-IDF relevance. All criteria currently have equal weight within these counts; TF-IDF is only a tie-breaker. These transparent defaults are engineering rules, not thresholds learned from historical decisions.
+When asked for lower-priority resumes, the assistant identifies explicit mandatory contradictions or the bottom third with fewer supported requirements or lower coverage than the top candidate. Equal evidence does not manufacture a lower-priority group. Reasons are shown; nobody is automatically rejected or removed.
 
 ## Chat and JSON
 
-The report is generated before the assistant is enabled. The assistant reads that report, not another candidate pool or a shared server memory. It supports strict/loose cohorts, manual shortlist, candidate gaps, explanations, verification/interview questions, multi-candidate evidence comparison, and excerpt retrieval. A candidate selector and follow-up context avoid repeating a filename. Unsupported questions return an explicit inability to establish the answer. Resume instructions are treated as text, and all displayed content is escaped.
+The report is generated before the assistant is enabled. The assistant supports the ranked cohort, manual shortlist, candidate gaps, evidence and interview questions, skill groups, PhD completion groups, lower-priority reviews and excerpt retrieval. PhD groups distinguish explicitly completed, ongoing, explicitly incomplete, unclear and unmentioned qualifications. Listed degree dates alone do not establish completion; supervising PhD students does not establish the candidate has a PhD. Conflicting statements remain uncertain.
 
-Schema version 2 retains `results`, `shortlist`, `skippedFiles`, `jobDescription`, `criteria`, and `scoreDefinition`. It adds structured requirements, cohorts and policies, candidate source text, method metadata, gaps, questions and chat history. Candidate identity is the source SHA-256, so equal filenames do not merge people. Manual decisions remain distinct from proposed cohorts. Regenerating a review resets the prior report and chat; changing a cohort cap preserves manual notes and selections.
+Whole-pool questions such as “Who hasn't completed a PhD?” override an earlier candidate context. Candidate-specific follow-ups can use the optional selector. The bot uses retrieval and deterministic answer templates, not a general-purpose LLM. Unsupported questions return an inability to establish the answer. Resume instructions are treated as text, and displayed content is escaped.
+
+Schema version 3 contains `results`, `shortlist`, `skippedFiles`, `jobDescription`, `scoreDefinition`, automatic `requirements`, and `cohort` (every candidate's rank, filename and source hash). It retains candidate source text, method metadata, gaps, questions and chat history, and adds doctoral status. The prior `cohorts.strict` and `cohorts.loose` fields are removed. Candidate identity is the source SHA-256. Regenerating or resetting clears the prior report and chat.
 
 ## Future model training
 

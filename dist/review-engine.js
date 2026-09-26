@@ -32,12 +32,12 @@ function quantity(text) {
   return { minimum: maximumOnly ? null : Number(m[1]), maximum: maximumOnly ? Number(m[1]) : m[2] ? Number(m[2]) : null, lowerBound: /\+|\b(at least|over|more than)\b/i.test(normalized), unit: m[3].toLowerCase().replace(/^(years?|yrs?)$/, 'years').replace(/^months?$/, 'months').replace(/^employees?$/, 'employees') };
 }
 
-// Draft extraction is deliberately editable: it is not an assertion that every JD is understood.
+// Automatic draft extraction supplies evidence analysis without a setup questionnaire.
 export function extractRequirements(jd, criteria = []) {
   const rows = [];
   let sectionType = 'Preferred';
   for (const raw of jd.split(/\r?\n|;|(?<=[.!?])\s+(?=[A-Z])/)) {
-    const line = raw.replace(/^\s*[-•*\d.)]+\s*/, '').trim();
+    const line = raw.replace(/^\s*(?:[-•*]\s+|\d+[.)]\s+)/, '').trim();
     if (!line) continue;
     const heading = line.match(/^(required|requirements|mandatory|essential|preferred|desirable|nice to have|responsibilities|duties|about us|company|benefits)\s*:?\s*$/i);
     if (heading) {
@@ -141,6 +141,10 @@ export function evaluateRequirement(requirement, record, asOfYear = new Date().g
     strength = explicitDegree ? 'Strong' : strength;
     gap = explicitDegree ? null : 'Confirm the exact degree, discipline, institution, license/certification and validity. Higher or related qualifications are not assumed equivalent.';
     notes.push('Qualification claims have not been authenticated with the institution.');
+    if (PHD.test(requirement.description) && doctoralStatus(record.text).status !== 'completed') {
+      status = 'Requires Verification';
+      gap = 'PhD completion is not explicitly established; a mention, ongoing study or coursework is not a completed degree.';
+    }
   }
   if (requirement.category === 'Achievement' && /\b(Q1|ranking|ranked|journal|patent|award)\b/i.test(requirement.description)) {
     status = best ? 'Requires Verification' : 'Not Found';
@@ -161,20 +165,9 @@ export function evaluateRequirement(requirement, record, asOfYear = new Date().g
   return { ...requirement, candidateEvidence: evidence, evidenceStrength: strength, candidateValue, experienceEstimate, verificationStatus: status, gap, lastEvidenceYear, notes, verificationQuestion: status === 'Verified' || status === 'Context' ? null : `For “${requirement.description}”, please provide the relevant role/project, dates, specific responsibilities and supporting evidence${requirement.category === 'Qualification' ? ', including institution and current credential validity' : ''}.` };
 }
 
-export function buildCohorts(results, { strictLimit = 10, looseLimit = 20 } = {}) {
-  strictLimit = Math.max(1, Math.min(10, Number(strictLimit) || 10));
-  looseLimit = Math.max(1, Math.min(20, Number(looseLimit) || 20));
-  const mandatory = (r) => r.requirementAnalysis.filter((a) => a.type === 'Mandatory');
-  const strict = results.filter((r) => mandatory(r).length > 0 && mandatory(r).every((a) => a.verificationStatus === 'Verified')).slice(0, strictLimit);
-  const loose = results.filter((r) => !mandatory(r).some((a) => a.verificationStatus === 'Contradicted') && r.evidenceCoverage >= 50).slice(0, looseLimit);
-  const ids = (list) => list.map((r) => r.sourceSha256);
-  return { strict: ids(strict), loose: ids(loose), strictLimit, looseLimit, policy: { strict: 'Every mandatory requirement must be Verified from resume evidence. At least one mandatory requirement is needed.', loose: 'At least 50% of non-context requirements have direct evidence (Verified, Mentioned, or Requires Verification with Moderate/Strong evidence), and no mandatory requirement is Contradicted.', note: 'Proposed review cohorts, not hiring decisions. Limits are caps, not quotas. Verified means supported by resume text, not independently authenticated. Loose includes strict candidates when they meet the loose policy.' } };
-}
-
-export function createReport(jd, records, requirements, failures = [], options = {}) {
+export function createReport(jd, records, requirements = extractRequirements(jd), failures = [], options = {}) {
   if (records.length < 5 || records.length > MAX_RESUMES) throw new Error('Use 5–30 readable, unique resumes.');
   if (new Set(records.map((r) => r.sha256)).size !== records.length) throw new Error('Duplicate resume contents.');
-  if (!requirements.some((r) => r.type !== 'Context')) throw new Error('Review and add at least one non-context requirement.');
   if (requirements.some((r) => !r.description.trim() || !CATEGORIES.includes(r.category) || !TYPES.includes(r.type) || [r.minimum, r.maximum].some((v) => v !== null && (!Number.isFinite(v) || v < 0)) || (r.minimum !== null && r.maximum !== null && r.maximum < r.minimum) || ((r.minimum !== null || r.maximum !== null) && !r.unit.trim()))) throw new Error('Complete each requirement and check its numeric bounds and unit.');
   const results = rankCandidates(jd, records).map((r) => {
     const record = records.find((item) => item.sha256 === r.sourceSha256);
@@ -182,36 +175,66 @@ export function createReport(jd, records, requirements, failures = [], options =
     const active = analysis.filter((a) => a.type !== 'Context');
     const verified = active.filter((a) => a.verificationStatus === 'Verified').length;
     const supported = active.filter((a) => ['Strong', 'Moderate'].includes(a.evidenceStrength) && ['Verified', 'Mentioned', 'Requires Verification'].includes(a.verificationStatus)).length;
-    return { ...r, requirementAnalysis: analysis, verifiedRequirements: verified, evidenceCoverage: Math.round(100 * supported / active.length), gaps: active.filter((a) => a.gap).map((a) => ({ requirementId: a.id, status: a.verificationStatus, gap: a.gap })), verificationQuestions: active.filter((a) => a.verificationQuestion).map((a) => ({ requirementId: a.id, question: a.verificationQuestion })), recruiterDecision: 'not_selected_in_this_review', recruiterNote: '' };
+    return { ...r, requirementAnalysis: analysis, verifiedRequirements: verified, evidenceCoverage: active.length ? Math.round(100 * supported / active.length) : 0, doctoralStatus: doctoralStatus(record.text), gaps: active.filter((a) => a.gap).map((a) => ({ requirementId: a.id, status: a.verificationStatus, gap: a.gap })), verificationQuestions: active.filter((a) => a.verificationQuestion).map((a) => ({ requirementId: a.id, question: a.verificationQuestion })), recruiterDecision: 'not_selected_in_this_review', recruiterNote: '' };
   }).sort((a, b) => b.verifiedRequirements - a.verifiedRequirements || b.evidenceCoverage - a.evidenceCoverage || b.score - a.score || a.candidate.localeCompare(b.candidate));
-  return { schemaVersion: '2.0', generatedAt: new Date().toISOString(), jobDescription: jd, requirements, analysisMethod: 'Editable rule-based requirement extraction and conservative resume evidence analysis; no model weight training or external fact verification.', scoreDefinition: 'Ranking orders verified requirement count, direct evidence coverage, then TF-IDF relevance. Relevance is not a probability.', processing: 'Documents processed in browser memory. This export includes extracted resume text for grounded review.', results, cohorts: buildCohorts(results, options), shortlist: [], skippedFiles: failures, candidateSources: records.map(({ candidate, sha256, text }) => ({ candidate, sourceSha256: sha256, text })), chat: [] };
+  return { schemaVersion: '3.0', generatedAt: new Date().toISOString(), jobDescription: jd, requirements, analysisMethod: 'Automatic rule-based JD analysis with resume excerpt retrieval; no model weight training or external fact verification.', scoreDefinition: 'Ranking orders verified requirement count, direct evidence coverage, then TF-IDF relevance. Relevance is not a probability.', processing: 'Documents processed in browser memory. This export includes extracted resume text for grounded review.', results, cohort: results.map((r, index) => ({ rank: index + 1, candidate: r.candidate, sourceSha256: r.sourceSha256 })), shortlist: [], skippedFiles: failures, candidateSources: records.map(({ candidate, sha256, text }) => ({ candidate, sourceSha256: sha256, text })), chat: [] };
+}
+
+const PHD = /\b(?:ph\.?\s*d\.?|doctorate|doctoral|doctor of philosophy)\b/i;
+export function doctoralStatus(text) {
+  const evidence = segments(text).filter((s) => PHD.test(s.text) && !/\b(supervis|mentor|advis|recruit|teach|taught|assist).*\b(?:ph\.?d|doctoral)\b/i.test(s.text));
+  const classified = evidence.map((s) => {
+    let status = 'unclear';
+    if (/honorary|honoris causa/i.test(s.text)) status = 'unclear';
+    else if (/\b(not (?:yet )?completed|not (?:yet )?awarded|hasn['’]?t completed|incomplete|did not complete|didn['’]?t complete|withdrawn|dropped out|no phd|no ph\.d|without a phd|do not hold|not earned)\b/i.test(s.text)) status = 'not_completed';
+    else if (/\b(pursuing|pursued|ongoing|in progress|candidate|student|expected|anticipated|enrolled|pending|submitted|coursework|ABD|present)\b/i.test(s.text)) status = 'in_progress';
+    else if (/\b(earned|awarded|conferred|obtained|graduated|completed|holds?|received)\b/i.test(s.text)) status = 'completed';
+    return { ...s, status };
+  });
+  const states = new Set(classified.map((s) => s.status));
+  const status = states.size > 1 ? 'unclear' : classified[0]?.status || 'not_found';
+  return { status, evidence: classified, note: 'Resume statements only. A listed degree or missing mention does not independently establish completion.' };
 }
 
 export function suggestedQuestions(report, candidateId) {
   const result = report.results.find((r) => r.sourceSha256 === candidateId) || report.results[0];
   const gap = result?.requirementAnalysis.find((a) => a.verificationQuestion);
-  return ['Show strict and loose cohorts', 'Who did I shortlist for this round?', ...(result ? [`What needs verification for ${result.candidate}?`, `What evidence supports ${result.candidate}?`, `Suggest interview questions for ${result.candidate}`, ...(gap ? [`What does ${result.candidate} say about ${gap.description}?`] : [])] : [])];
+  return ['Show everyone in ranked order', "Who hasn't completed a PhD?", 'Which resumes should I review later?', ...(result ? [`What needs verification for ${result.candidate}?`, ...(gap ? [`What does ${result.candidate} say about ${gap.description}?`] : [])] : [])];
 }
 
 export function answerQuestion(report, question, context = {}) {
   const q = question.toLowerCase();
   const named = report.results.filter((r) => q.includes(r.candidate.toLowerCase()));
-  const selected = named.length ? named : context.candidateId ? report.results.filter((r) => r.sourceSha256 === context.candidateId) : [];
+  const wholePool = /\b(who|which (?:resumes|candidates|people)|everyone|all candidates|cohort)\b/.test(q);
+  const selected = named.length ? named : !wholePool && context.candidateId ? report.results.filter((r) => r.sourceSha256 === context.candidateId) : [];
   const cite = (r, evidence) => ({ candidate: r.candidate, sourceSha256: r.sourceSha256, ...evidence });
-  if (selected.length && /\b(why|explain)\b/.test(q) && /\b(strict|loose|cohort)\b/.test(q)) {
-    return { text: selected.map((r) => `${r.candidate}\nStrict: ${report.cohorts.strict.includes(r.sourceSha256) ? 'included' : 'not included'}. Loose: ${report.cohorts.loose.includes(r.sourceSha256) ? 'included' : 'not included'}.\nMandatory requirements:\n${r.requirementAnalysis.filter((a) => a.type === 'Mandatory').map((a) => `• ${a.description}: ${a.verificationStatus}${a.gap ? ` — ${a.gap}` : ''}`).join('\n') || 'None configured; strict eligibility cannot be established.'}\nDirect evidence coverage: ${r.evidenceCoverage}%. Cohort caps also apply.`).join('\n\n'), citations: selected.flatMap((r) => r.requirementAnalysis.filter((a) => a.type === 'Mandatory').flatMap((a) => a.candidateEvidence.slice(0, 1))), candidateId: selected.length === 1 ? selected[0].sourceSha256 : null };
+  if (PHD.test(q)) {
+    const pool = selected.length ? selected : report.results;
+    const negative = /didn|hasn|haven|not |without|incomplete|didnt|hasnt|haven’t|hasn’t|didn’t/.test(q);
+    const labels = negative ? { in_progress: 'Not completed yet / in progress as stated', not_completed: 'Explicitly not completed', not_found: 'No PhD information found — completion unknown', unclear: 'PhD mentioned — completion needs confirmation' } : { completed: 'Completion explicitly stated', in_progress: 'In progress as stated', not_completed: 'Explicitly not completed', unclear: 'PhD mentioned — completion needs confirmation', not_found: 'No PhD information found — completion unknown' };
+    const groups = Object.entries(labels).map(([status, label]) => { const matches = pool.filter((r) => r.doctoralStatus.status === status); return `${label} (${matches.length})\n${matches.map((r) => `• ${r.candidate}`).join('\n') || 'None.'}`; });
+    const included = pool.filter((r) => r.doctoralStatus.status in labels);
+    return { text: groups.join('\n\n') + '\n\nMissing or ambiguous information is not proof of an incomplete PhD. These are resume claims; confirm with the candidate.', citations: included.flatMap((r) => r.doctoralStatus.evidence.map((e) => cite(r, e))), candidateId: selected.length === 1 ? selected[0].sourceSha256 : null };
   }
-  if (/\b(strict|loose|cohort|scrutiny)\b/.test(q)) {
-    const modes = /\bstrict\b/.test(q) && !/\bloose\b/.test(q) ? ['strict'] : /\bloose\b/.test(q) && !/\bstrict\b/.test(q) ? ['loose'] : ['strict', 'loose'];
+  if (/review later|lower.priority|not bother|deprioriti|ignore|skip|reject|least suitable|least relevant/.test(q)) {
+    const best = report.results[0];
+    const lower = report.results.filter((r, i) => r.requirementAnalysis.some((a) => a.type === 'Mandatory' && a.verificationStatus === 'Contradicted') || (i >= Math.floor(report.results.length * 2 / 3) && (r.verifiedRequirements < best.verifiedRequirements || r.evidenceCoverage < best.evidenceCoverage)));
+    return { text: lower.length ? `Lower priority for review against this JD:\n${lower.map((r) => `• ${r.candidate} — rank ${report.results.indexOf(r) + 1}; ${r.verifiedRequirements} supported requirements; ${r.evidenceCoverage}% evidence coverage. ${r.gaps.slice(0, 2).map((g) => `${g.requirementId}: ${g.gap}`).join(' ')}`).join('\n')}\n\nThis identifies explicit mandatory conflicts or the bottom third with less evidence than the top candidate. Everyone remains in the cohort. Missing evidence calls for follow-up, not automatic rejection.` : 'I do not have enough evidence to distinguish a lower-priority group. Everyone remains in the cohort; inspect the evidence and gaps before deciding.', citations: lower.flatMap((r) => r.requirementAnalysis.filter((a) => a.verificationStatus === 'Contradicted').flatMap((a) => a.candidateEvidence.map((e) => cite(r, e)))), candidateId: null };
+  }
+  const topics = TERMS.filter((term) => phrase(term).test(q));
+  if (wholePool && topics.length) {
+    const negative = /\b(no|not|without|lacks?|missing)\b|don['’]?t|doesn['’]?t|didn['’]?t|haven['’]?t|hasn['’]?t/.test(q);
+    const assessed = report.candidateSources.map((source) => ({ source, checks: topics.map((description) => evaluateRequirement({ description, category: 'Technical skill', type: 'Preferred', minimum: null, maximum: null, unit: '' }, { candidate: source.candidate, sha256: source.sourceSha256, text: source.text })) }));
+    const matches = assessed.filter(({ checks }) => negative ? checks.some((a) => ['Not Found', 'Partial', 'Contradicted'].includes(a.verificationStatus)) : checks.every((a) => ['Verified', 'Mentioned', 'Requires Verification'].includes(a.verificationStatus)));
+    return { text: `${negative ? 'Missing, partial or conflicting evidence' : 'Resume evidence'} for ${topics.join(', ')} (${matches.length} candidates):\n${matches.map(({ source, checks }) => `• ${source.candidate}: ${checks.map((a) => `${a.description} — ${a.verificationStatus}`).join('; ')}`).join('\n') || 'No matching candidates.'}\n\nA missing mention does not mean the candidate lacks the skill. Confirm proficiency directly.`, citations: matches.flatMap(({ checks }) => checks.flatMap((a) => a.candidateEvidence.slice(0, 1))), candidateId: null };
+  }
+  if (/\b(cohort|ranked|ranking|everyone|top \d+)\b/.test(q)) {
     const requested = Number(q.match(/\b(?:top|first|show|give me)\s+(\d+)\b/)?.[1]);
-    return { text: modes.map((mode) => {
-      const candidates = report.results.filter((r) => report.cohorts[mode].includes(r.sourceSha256)).slice(0, requested || Infinity);
-      return `${mode.toUpperCase()} — ${candidates.length} candidates\n${report.cohorts.policy[mode]}\n${candidates.map((r, i) => `${i + 1}. ${r.candidate} — ${r.verifiedRequirements} verified; ${r.evidenceCoverage}% direct evidence coverage`).join('\n') || 'No candidates meet this policy. Review unresolved requirements; the cohort is not padded.'}`;
-    }).join('\n\n') + '\n\n' + report.cohorts.policy.note, citations: [], candidateId: context.candidateId };
+    return { text: `Ranked cohort — ${report.results.length} candidates total\n${report.results.slice(0, requested || Infinity).map((r, i) => `${i + 1}. ${r.candidate} — ${r.verifiedRequirements} supported requirements; ${r.evidenceCoverage}% evidence coverage`).join('\n')}`, citations: [], candidateId: null };
   }
   if (/short.?list|selected.*round/.test(q)) {
     const list = report.results.filter((r) => r.recruiterDecision === 'shortlisted_by_recruiter');
-    return { text: list.length ? `Your manually selected shortlist:\n${list.map((r) => `• ${r.candidate}${r.recruiterNote ? ` — ${r.recruiterNote}` : ''}`).join('\n')}` : 'You have not manually shortlisted anyone yet. Ask for strict or loose cohorts to review the proposed candidates.', citations: [] };
+    return { text: list.length ? `Your manually selected shortlist:\n${list.map((r) => `• ${r.candidate}${r.recruiterNote ? ` — ${r.recruiterNote}` : ''}`).join('\n')}` : 'You have not manually shortlisted anyone yet. Ask for the ranked cohort to review every candidate.', citations: [] };
   }
   if (selected.length && /question|interview|faq|verif|gap|missing|evidence|why|compare/.test(q)) {
     const questions = /question|interview|faq/.test(q);
@@ -229,5 +252,5 @@ export function answerQuestion(report, question, context = {}) {
   const queryTerms = [...new Set(tokenize(question))].filter((t) => !GENERIC.has(t) && !['tell','show','about','what','which','does','resume','candidate','please'].includes(t));
   const sources = report.candidateSources.filter((s) => !selected.length || selected.some((r) => r.sourceSha256 === s.sourceSha256));
   const hits = sources.flatMap((source) => segments(source.text).map((s) => ({ candidate: source.candidate, sourceSha256: source.sourceSha256, ...s, overlap: queryTerms.filter((t) => tokenize(s.text).includes(t)).length }))).filter((s) => s.overlap > 0).sort((a, b) => b.overlap - a.overlap).slice(0, 5);
-  return { text: hits.length ? 'These resume excerpts relate to your question. They are candidate claims, not independently verified facts.' : 'I cannot establish that from this review. Ask about strict/loose cohorts, your shortlist, or name a candidate to inspect evidence, gaps and interview questions.', citations: hits.map(({ overlap, ...s }) => s), candidateId: selected.length === 1 ? selected[0].sourceSha256 : null };
+  return { text: hits.length ? 'These resume excerpts relate to your question. They are candidate claims, not independently verified facts.' : 'I cannot establish that from this review. Ask about the ranked cohort, PhD completion, lower-priority reviews, or name a candidate to inspect evidence and gaps.', citations: hits.map(({ overlap, ...s }) => s), candidateId: selected.length === 1 ? selected[0].sourceSha256 : null };
 }
