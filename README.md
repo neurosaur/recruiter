@@ -1,5 +1,22 @@
 # Neurosaur Phase 1
 
+## Cloudflare deployment
+
+See [CLOUDFLARE.md](CLOUDFLARE.md) for GitHub-connected **Workers + Containers** deployment, exact dashboard settings and access protection. This requires Workers Paid; a static Pages build cannot run Streamlit. The repository includes the Dockerfile, Worker proxy and Wrangler configuration.
+
+## Automatic Git sync
+
+The Windows login task `NeurosaurGitAutoSync` runs `scripts/git_autosync.py` in the background. After code is unchanged for 40 seconds, it runs tests, commits eligible changes and pushes `main` to `origin`. Retries happen at most once per minute. It never force-pushes or pulls; a remote conflict is logged for manual resolution. Switching branches, staging changes manually or starting a merge pauses synchronization. Only common code/configuration/text file types are watched; candidate documents, data, uploads, reports, secrets, caches and environments are excluded. Keep personal data out of source-code files and the synthetic examples folder.
+
+Logs and status: `.cache/autosync/autosync.log` and `.cache/autosync/status.json` on G:.
+
+```powershell
+# Pause (also disables automatic start at login)
+powershell -ExecutionPolicy Bypass -File .\scripts\stop-autosync.ps1
+# Resume
+powershell -ExecutionPolicy Bypass -File .\scripts\start-autosync.ps1
+```
+
 ## Website
 
 ```powershell

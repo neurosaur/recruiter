@@ -9,3 +9,7 @@ output/
 !.env.example
 .streamlit/secrets.toml
 *.log
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*

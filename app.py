@@ -45,8 +45,11 @@ with st.sidebar:
     st.write(('➜ ' if step == 2 else '') + '2. Candidate resumes')
     st.write(('➜ ' if step == 3 else '') + '3. Evidence & shortlist')
     st.divider()
-    st.caption('Local workspace • Up to 10 resumes per review')
-    st.caption('Resume contents are processed locally. Temporary upload files are removed after parsing.')
+    hosted = os.environ.get('DEPLOYMENT_MODE') == 'cloud'
+    st.caption(('Hosted workspace' if hosted else 'Local workspace') + ' • Up to 10 resumes per review')
+    st.caption(('Resumes are processed on this hosted server.' if hosted else 'Resume contents are processed locally.') + ' Temporary upload files are removed after parsing.')
+    if hosted:
+        st.caption('Download your review before leaving. A server restart or deployment clears active sessions.')
     if st.button('Start a new review'):
         st.session_state.clear()
         st.rerun()

@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neurosaur-recruiter",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-26",
+  "containers": [
+    {
+      "class_name": "RecruiterContainer",
+      "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "RECRUITER", "class_name": "RecruiterContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RecruiterContainer"] }]
+}
