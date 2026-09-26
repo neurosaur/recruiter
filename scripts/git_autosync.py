@@ -5,6 +5,7 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 import msvcrt
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -15,7 +16,7 @@ PYTHON = ROOT / '.venv' / 'Scripts' / 'python.exe'
 CACHE = ROOT / '.cache' / 'autosync'
 STOP = CACHE / 'stop'
 ALLOWED = {'.py', '.ps1', '.md', '.txt', '.toml', '.json', '.jsonc', '.yaml', '.yml',
-           '.js', '.jsx', '.ts', '.tsx', '.css', '.html', '.ini', '.cfg', '.sh'}
+           '.js', '.mjs', '.jsx', '.ts', '.tsx', '.css', '.html', '.ini', '.cfg', '.sh'}
 SPECIAL = {'.gitignore', '.gitattributes', '.dockerignore', '.npmrc', '.env.example',
            '.node-version', 'Dockerfile'}
 PRIVATE = {'data', 'output', 'uploads', 'resumes', 'reports', '.git', '.venv',
@@ -77,8 +78,17 @@ def sync(names, snapshot):
         if (ROOT / '.git' / marker).exists():
             raise RuntimeError('Paused: Git merge/rebase operation is in progress')
     if names:
+        test_temp = ROOT / '.cache' / 'tmp'
+        test_temp.mkdir(parents=True, exist_ok=True)
+        test_env = {**os.environ, 'TEMP': str(test_temp), 'TMP': str(test_temp),
+                    'npm_config_cache': str(ROOT / '.cache' / 'npm'),
+                    'PYTHONDONTWRITEBYTECODE': '1'}
+        web_test = subprocess.run(['cmd.exe', '/c', 'npm.cmd', 'test'], cwd=ROOT,
+                                  capture_output=True, timeout=180, env=test_env)
+        if web_test.returncode:
+            raise RuntimeError('Web tests failed; changes remain local. ' + web_test.stdout.decode('utf-8', errors='replace')[-3000:])
         test = subprocess.run([str(PYTHON), '-m', 'pytest', '-q'], cwd=ROOT,
-                              capture_output=True, timeout=180)
+                              capture_output=True, timeout=180, env=test_env)
         if test.returncode:
             raise RuntimeError('Tests failed; changes remain local. ' + test.stdout.decode('utf-8', errors='replace')[-3000:])
         if changes() != names or fingerprint(names) != snapshot:

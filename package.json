@@ -1,15 +1,14 @@
 {
-  "name": "neurosaur-recruiter",
+  "name": "recruiter",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check worker/index.js",
+    "build": "node scripts/build-static.mjs",
+    "check": "node --check public/app.js && node --check public/matcher.js && node --check public/review-engine.js && node --check scripts/build-static.mjs",
+    "test": "node --test tests/*.test.mjs && npm run check",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
-  },
-  "dependencies": {
-    "@cloudflare/containers": "0.3.7"
   },
   "devDependencies": {
     "wrangler": "4.141.0"

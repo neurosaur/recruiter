@@ -1,48 +1,77 @@
-# Deploy Neurosaur from GitHub
+# Deploy Neurosaur on Cloudflare Workers Free
 
-This Streamlit application runs in **Cloudflare Workers + Containers**. It requires a Workers Paid plan. Cloudflare Pages cannot serve its Python/PyTorch process. Cloudflare builds the Docker image from the repository; Docker is not required on your Windows computer for this path.
+The Cloudflare deployment is a static, browser-based version of the recruiter workspace. It does not use Workers Containers, Durable Objects, Docker, Python, PyTorch, Streamlit, FAISS or a server-side embedding model. This is the required architecture for the Workers Free plan.
 
-## Dashboard settings
+## What caused the previous failures
 
-1. Open Workers & Pages → Create application → Import a repository.
-2. Authorize GitHub and select `neurosaur/recruiter`.
-3. Choose the **Worker** deployment flow, not Pages.
-4. Use these settings:
+1. The original configuration declared a Cloudflare Container, which requires Workers Paid.
+2. The next repository used `recruiter.jsonc`. Wrangler only auto-discovers supported names such as `wrangler.jsonc`, so it ignored that file and reported that it could not detect a static directory.
+3. A root-level `requirements.txt` caused Workers Builds to install the complete Python/AI stack even though the static deployment did not use it.
 
-| Setting | Value |
+The corrected repository uses `wrangler.jsonc`, creates `dist/` during `npm run build`, serves that directory as Workers Static Assets, and keeps local Python packages in `requirements-local.txt` so Cloudflare does not install them.
+
+## Cloudflare dashboard settings
+
+Open **Workers & Pages → recruiter → Settings → Build** and use:
+
+| Setting | Required value |
 | --- | --- |
-| Worker/project name | `neurosaur-recruiter` |
+| Worker name | `recruiter` |
 | Production branch | `main` |
-| Root directory | `/` (repository root) |
-| Build command | `npm ci && npm run build` |
+| Root directory | `/` or leave blank |
+| Build command | `npm test && npm run build` |
 | Deploy command | `npx wrangler deploy` |
-| Dependency installation | Included in the build command |
-| Build environment | `NODE_VERSION=24` |
-| Build environment | `SKIP_DEPENDENCY_INSTALL=1` |
-| Static output directory | None; this is a Worker with a container |
+| Node version | `24` |
+| Static output directory | Leave blank; `wrangler.jsonc` supplies `./dist` |
 
-Python dependencies install inside Docker, not in the Workers build host. The Docker image bundles the MiniLM model and CPU-only PyTorch. No Hugging Face or OpenAI API key is required. The first image build takes longer than later cached builds.
+Do not set a Python build command, Docker command, output directory override, `--containers-rollout`, or a Containers API token. The standard Workers Builds token is sufficient for static asset deployment.
 
-The Worker name must match `name` in `wrangler.jsonc`. Production must use `wrangler deploy`, not `wrangler versions upload`, so the container image is published too. Disable non-production branch builds initially.
+## Repository changes to commit
 
-## Before using real resumes
+Commit and push all of these together:
 
-The app currently has no user login. Protect its deployed URL with Cloudflare Access restricted to your recruiter email/team before uploading personal data. For workers.dev URLs, use the Worker's Settings → Domains & Routes → workers.dev Access control; alternatively attach a custom domain and protect it with a self-hosted Access application. Protect or disable any alternate public route. Do not put credentials in this repository.
+- `wrangler.jsonc`
+- `package.json` and `package-lock.json`
+- `public/`
+- `scripts/build-static.mjs`
+- `requirements-local.txt`
+- the deletion of `recruiter.jsonc`, root `requirements.txt`, and `worker/index.js`
 
-## Check the deployment
+Pushing to `main` starts a new production build. If you upload the ZIP manually, extract it and ensure the repository root contains `wrangler.jsonc` directly—not another nested folder.
 
-Wait for container provisioning after the first deployment. Open the Worker URL and verify the JD screen. Use the JD and five synthetic resumes under `examples/` to test the full upload-and-ranking flow before using real resumes. The health endpoint is `/_stcore/health`.
+## Verify before pushing
 
-The configuration uses one `standard-1` container (4 GiB memory) for the local CPU model. HTTP uploads and WebSockets route to the same instance. Each Streamlit session has its own candidate results; only model resources are shared. The container sleeps after 10 minutes idle. Data is ephemeral: deployments, restarts and sleep can clear sessions. Download the JSON review before leaving. This baseline is for a small team, not a production multi-tenant service.
+```powershell
+npm test
+npm run build
+```
 
-## Local files and auto-deployment
+The build must create:
 
-Local app files, environments and caches remain under `G:\Project\applications`. Cloudflare deployment runs on Cloudflare infrastructure, which has no Windows drive letters. GitHub never receives resumes, local indexes or caches.
+```text
+dist/index.html
+dist/app.js
+dist/matcher.js
+dist/review-engine.js
+dist/styles.css
+```
 
-Once Git integration is enabled, pushes to `main` trigger Cloudflare builds. The optional Windows auto-sync watcher can create these pushes; keep it paused during multi-file edits that should ship together.
+After GitHub-connected deployment, test on the hosted URL: paste a JD, confirm the extracted requirements, upload 30 distinct synthetic resumes, compare strict and loose cohorts, ask candidate-specific questions, select candidates and download the JSON review. The automated controller smoke test exercises this flow without starting a local server. Browser rendering and PDF/DOCX reader integration should also be checked on the hosted site.
 
-## Official references
+## Data handling and functional differences
 
-- https://developers.cloudflare.com/containers/guides/deploy/
-- https://developers.cloudflare.com/containers/platform/limits/
-- https://developers.cloudflare.com/workers/ci-cd/builds/
+- Documents and review state stay in browser memory and are not posted to the application server.
+- Closing or refreshing the page clears the review; download the JSON first.
+- TXT works without a document-reader library. PDF.js and Mammoth are loaded from pinned public CDNs for PDF and DOCX parsing. The document bytes remain in the browser, but production handling of sensitive resumes should use locally vendored copies of those libraries.
+- Scanned PDFs still require OCR before use.
+- The web review ranks verified requirement count, direct evidence coverage, then TF-IDF relevance. It is not the local MiniLM semantic score or a hiring probability. Review the editable extraction and cited evidence before deciding.
+- The report-grounded assistant supports cohorts, manual selections, gaps, evidence retrieval and candidate questions without an API key. No model weights are fine-tuned by this update; see `docs/REVIEW_ENGINE.md`.
+- JSON exports contain extracted resume text, evidence, cohorts, recruiter decisions and chat history. They are candidate data, not public deployment artifacts.
+- The original Python/Streamlit semantic workflow remains available locally through `setup.ps1` and `start.ps1`.
+
+## Relevant Cloudflare documentation
+
+- https://developers.cloudflare.com/workers/static-assets/
+- https://developers.cloudflare.com/workers/static-assets/get-started/
+- https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/
+- https://developers.cloudflare.com/workers/platform/limits/

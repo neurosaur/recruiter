@@ -1,6 +1,6 @@
 **
 !Dockerfile
-!requirements.txt
+!requirements-local.txt
 !app.py
 !run.py
 !src/

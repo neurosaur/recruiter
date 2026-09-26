@@ -46,7 +46,7 @@ with st.sidebar:
     st.write(('➜ ' if step == 3 else '') + '3. Evidence & shortlist')
     st.divider()
     hosted = os.environ.get('DEPLOYMENT_MODE') == 'cloud'
-    st.caption(('Hosted workspace' if hosted else 'Local workspace') + ' • Up to 10 resumes per review')
+    st.caption(('Hosted workspace' if hosted else 'Local workspace') + ' • Up to 30 resumes per review')
     st.caption(('Resumes are processed on this hosted server.' if hosted else 'Resume contents are processed locally.') + ' Temporary upload files are removed after parsing.')
     if hosted:
         st.caption('Download your review before leaving. A server restart or deployment clears active sessions.')
@@ -77,17 +77,17 @@ if step == 1:
             st.error(f'Could not read the JD: {exc}')
 
 elif step == 2:
-    st.subheader('2. Add 5–10 candidate resumes')
+    st.subheader('2. Add 5–30 candidate resumes')
     with st.expander('Review the job description'):
         st.text(st.session_state.jd)
     uploads = st.file_uploader('Upload resumes', type=['pdf', 'docx', 'txt'], accept_multiple_files=True,
                                help='Maximum 10 MB per file. Scanned PDFs need text extraction/OCR first.')
-    st.caption(f'{len(uploads)} of 10 files selected. Use 5–10 resumes for this first comparison.')
+    st.caption(f'{len(uploads)} of 30 files selected. Use 5–30 resumes for this comparison.')
     back, run = st.columns([1, 3])
     if back.button('Edit JD'):
         st.session_state.step = 1
         st.rerun()
-    if run.button('Compare candidates', type='primary', disabled=not 5 <= len(uploads) <= 10):
+    if run.button('Compare candidates', type='primary', disabled=not 5 <= len(uploads) <= 30):
         records, failures, seen = [], [], set()
         progress = st.progress(0, text='Reading candidate resumes…')
         for i, upload in enumerate(uploads):

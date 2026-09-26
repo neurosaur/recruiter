@@ -13,9 +13,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt ./
+COPY requirements-local.txt ./
 RUN pip install torch --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements.txt
+    && pip install -r requirements-local.txt
 COPY src/ ./src/
 # Bake the embedding model into the image. No model download at runtime.
 RUN python -c "from src.embeddings import Embedder; Embedder().encode(['Build verification'])"

@@ -1,8 +1,30 @@
-# Neurosaur Phase 1
+# Neurosaur Candidate Review
 
-## Cloudflare deployment
+This repository now supports two separate operating modes:
 
-See [CLOUDFLARE.md](CLOUDFLARE.md) for GitHub-connected **Workers + Containers** deployment, exact dashboard settings and access protection. This requires Workers Paid; a static Pages build cannot run Streamlit. The repository includes the Dockerfile, Worker proxy and Wrangler configuration.
+- **Cloudflare Workers Free:** a static browser application under `public/`. It reviews 5–30 TXT, text-based PDF or DOCX resumes against editable JD requirements, generates a JSON report, proposes strict/loose review cohorts, and provides a report-grounded chatbot with citations and candidate questions. No application server or Cloudflare Container is used.
+- **Local Python:** the original Streamlit, Sentence Transformers and FAISS workflow remains available for local use. It is not deployed by the Free-plan configuration.
+
+## Evidence review and chatbot
+
+The hosted workflow implements the supplied fine-tune specification as an evidence framework, not model weight training. Review the automatically drafted requirements before comparing: edit mandatory/preferred labels, category, numeric bounds and units; add missing requirements; and separate compound criteria. The application distinguishes demonstrated evidence, mentions, partial matches, missing information, contradictions and claims needing verification.
+
+Strict cohorts require all mandatory requirements to be supported by resume evidence (cap 10). Loose cohorts require at least 50% direct evidence coverage without an explicit mandatory contradiction (cap 20). Caps can be reduced, and neither cohort is padded. Final shortlisting remains a recruiter action.
+
+The JSON is generated when comparison completes. Ask the assistant for strict/loose cohorts, your manual shortlist, candidate evidence, gaps or interview questions. Follow-up questions use the selected candidate context. Download the full review, individual cohort JSON, or original resume files. Full JSON includes extracted resume text and chat history; closing the tab clears the active review.
+
+See [the evidence engine specification](docs/REVIEW_ENGINE.md) for the schema, policies, uncertainty handling and limitations. “Verified” means resume-supported, not externally authenticated. The heuristic extractor and matcher require recruiter review; they are not a fine-tuned language model.
+
+## Cloudflare Free deployment
+
+See [CLOUDFLARE.md](CLOUDFLARE.md) for exact GitHub-connected deployment settings. The required file is named `wrangler.jsonc`, the Worker name is `recruiter`, and the build produces the `dist/` static-asset directory.
+
+```powershell
+npm test
+npm run build
+```
+
+The hosted version performs all review work in browser memory. Refreshing or closing the tab clears the documents and active review. PDF and DOCX parsing libraries are loaded from pinned public CDN URLs; for sensitive production use, vendor those libraries into `public/vendor/` and update `public/app.js` and `public/index.html`.
 
 ## Automatic Git sync
 
@@ -17,7 +39,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\stop-autosync.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\start-autosync.ps1
 ```
 
-## Website
+## Local Python website
 
 ```powershell
 cd G:\Project\applications
@@ -25,11 +47,11 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1
 powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-Open http://127.0.0.1:8501. Enter a JD, optionally specify skills/phrases to verify, upload 5–10 resumes, and compare. Expand each result to inspect resume excerpts, select candidates yourself and add a justification. Download the review as JSON. The website keeps candidate results in browser-session server memory; temporary upload files are deleted after parsing. It does not reuse another session's candidate pool. Only the embedding model is shared. Use “Start a new review” to clear the current review. The service listens only on this computer; stop it with Ctrl+C.
+The legacy Python UI supports 5–30 resumes and its original semantic-ranking JSON. Its evidence and chat features have not been replaced by the hosted JavaScript engine. The new evidence review and chatbot run in the Cloudflare application. The CLI already supports arbitrary pool sizes. Local setup commands are retained for reference; they are not needed for Cloudflare deployment.
 
 All application environments, model downloads, caches and temporary upload files are configured under G:\Project\applications. The existing Python interpreter and Windows remain on C:. No system relocation is performed.
 
-Local resume ingestion and semantic JD matching using Python, PyMuPDF, python-docx, Sentence Transformers and FAISS. No API key is required. The first run downloads the MiniLM embedding model; subsequent runs can use `--offline`. Resume text is processed locally.
+The local mode provides semantic JD matching using Python, PyMuPDF, python-docx, Sentence Transformers and FAISS. No API key is required. The first run downloads the MiniLM embedding model; subsequent runs can use `--offline`. Resume text is processed locally.
 
 ## Windows setup
 
@@ -62,7 +84,7 @@ This rebuilds the index from the current folder. Results include every valid can
 
 Use `--store`, `--output` and `--model` to override defaults. Re-ingest when changing models. Paths are relative to your current working directory. A different JD can query the same index without re-parsing resumes.
 
-## Matching and evidence
+## Matching and evidence in local Python mode
 
 Long documents are split into model-token windows. Normalized chunk embeddings are averaged and normalized into one candidate vector. FAISS inner product on normalized vectors gives cosine similarity (range -1 to 1); this is not a probability or qualification score. Ties use the candidate filename. Reports retain source hashes and excerpts with extracted-text line numbers. Excerpts are selected by lexical overlap; they are not verified skills or proof that mandatory requirements are satisfied. Missing qualification details are not inferred.
 
