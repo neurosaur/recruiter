@@ -1,0 +1,5 @@
+Synthetic Candidate A
+Backend Software Engineer
+5 years developing Python APIs with FastAPI, PostgreSQL and Redis.
+Built tested REST services and deployed Docker containers.
+Implemented automated tests with pytest and GitHub Actions.
